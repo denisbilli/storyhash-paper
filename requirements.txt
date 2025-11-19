@@ -1,0 +1,43 @@
+# Python dependencies for StoryHash paper reproduction
+
+# Core ML/DL
+torch>=2.1.0
+torchvision>=0.16.0
+transformers>=4.35.0
+
+# Video processing
+opencv-python>=4.8.0
+opencv-contrib-python>=4.8.0
+ffmpeg-python>=0.2.0
+
+# CLIP
+clip @ git+https://github.com/openai/CLIP.git
+
+# SAM2 (Segment Anything 2)
+segment-anything-2 @ git+https://github.com/facebookresearch/segment-anything-2.git
+
+# Retrieval & indexing
+faiss-cpu>=1.7.4
+# For GPU support, use: faiss-gpu>=1.7.4
+
+# Scientific computing
+numpy>=1.24.0
+scipy>=1.11.0
+scikit-learn>=1.3.0
+
+# Data processing
+pandas>=2.0.0
+h5py>=3.9.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+plotly>=5.17.0
+
+# Progress bars & utilities
+tqdm>=4.66.0
+pyyaml>=6.0
+pillow>=10.0.0
+
+# Reproducibility
+wandb>=0.16.0  # Optional: experiment tracking

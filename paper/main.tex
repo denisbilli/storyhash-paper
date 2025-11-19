@@ -1,0 +1,146 @@
+% StoryHash: Lightweight Multi-Modal Fusion for Robust Video Retrieval
+% arXiv submission (single-column)
+% Author: Denis Billi
+% Date: November 2025
+
+\documentclass[11pt]{article}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[margin=1in]{geometry}
+\usepackage{textcomp}
+
+% Define degree symbol
+\newcommand{\degree}{$^\circ$}
+
+% Hyperref setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue,
+}
+
+% Title and author
+\title{\textbf{Lightweight Multi-Modal Fusion for Robust Video Retrieval: \\
+When Action Features Boost Confidence, Not Detection}}
+
+\author{
+    Denis Billi \\
+    Independent Researcher \\
+    \texttt{denis@denisbilli.it}
+}
+
+\date{November 2025}
+
+\begin{document}
+
+\maketitle
+
+% ============================================================================
+% ABSTRACT
+% ============================================================================
+\begin{abstract}
+Video content retrieval systems must handle realistic perturbations like cropping, compression, and speed changes while maintaining semantic accuracy. We present \textbf{StoryHash}, a lightweight multi-modal fusion architecture combining visual (CLIP), temporal (action features), and structural (scene graph) embeddings into a 527-dimensional vector. Through systematic evaluation on 89 DAVIS videos with 14 transformation types (1,242 tests), we achieve \textbf{98.6\% Recall@1} and \textbf{0.9748 average similarity}. Our ablation study reveals a surprising dichotomy: \textbf{action features boost confidence (+28\% similarity) but minimally impact detection rate (+0.4\% Recall@1)}. This finding validates efficiency-focused designs where lightweight temporal features (15D, 2.8\% overhead) dramatically improve match confidence without requiring expensive temporal models. We identify a CLIP vertical flip bias (84.3\% detection) and show rotation is the only transformation where action features aid detection (-2.3\% degradation without). Our work provides quantitative evidence for complementary fusion architectures where visual features provide discrimination and temporal features provide confidence.
+
+\noindent\textbf{Keywords:} video retrieval, multi-modal fusion, robustness, ablation study, CLIP, action recognition
+\end{abstract}
+
+% ============================================================================
+% 1. INTRODUCTION
+% ============================================================================
+\section{Introduction}
+
+\subsection{Motivation}
+
+Video content platforms face a persistent challenge: detecting modified or re-uploaded content despite realistic perturbations (cropping, compression, speed changes, flipping). Applications span copyright protection, content moderation, and tamper detection. While deep learning models excel at semantic understanding, their robustness to real-world transformations remains understudied, particularly when combining multiple modalities.
+
+\subsection{Research Questions}
+
+Our investigation centers on three fundamental questions that bridge theoretical understanding and practical deployment of multi-modal video retrieval systems.
+
+\textbf{First, we examine robustness}: Can a multi-modal video fingerprint achieve greater than 95\% detection rate under realistic perturbations encountered in social media ecosystems? Existing benchmarks focus on clean academic datasets (UCF101, Kinetics), but real-world content undergoes aggressive compression, cropping, speed adjustments, and geometric transformations during viral sharing. We hypothesize that fusing complementary modalities (visual semantics, temporal motion, structural relationships) will provide redundancy against perturbations that affect different feature types asymmetrically.
+
+\textbf{Second, we investigate modality contribution}: How do visual, temporal, and structural features contribute to detection capability versus match confidence? Prior multi-modal fusion work treats all modalities as equally necessary for performance, optimizing joint accuracy on action recognition or video captioning tasks. We challenge this assumption by isolating each modality's impact through ablation: does removing temporal features cause catastrophic failure (indicating necessity) or graceful degradation (indicating complementarity)? Crucially, we distinguish between detection rate (Recall@k: whether the system finds matches) and confidence (similarity scores: how certain the system is about matches)—a distinction critical for automated decision-making in copyright and moderation contexts.
+
+\textbf{Third, we quantify efficiency trade-offs}: What is the cost-benefit of adding lightweight temporal features to visual embeddings? Temporal models like VideoMAE and I3D extract rich spatiotemporal representations (768-2048 dimensions) but require expensive 3D convolutions and large memory footprints. We explore whether minimal motion statistics (15 dimensions aggregated from object tracking) can provide practical value—improved confidence, robustness to temporal perturbations—without matching the computational complexity of full temporal architectures. This question addresses deployment realities: production systems need "good enough" solutions that run at scale on CPU hardware, not state-of-the-art models requiring GPU clusters.
+
+\subsection{Contributions}
+
+This work makes five key contributions to video retrieval and multi-modal fusion research.
+
+\textbf{Comprehensive robustness benchmark}: We conduct systematic evaluation of video fingerprint robustness through 1,242 tests spanning 14 transformation types that simulate real-world content modifications. Our benchmark includes spatial perturbations (crop 10\%/20\%, rotate 5\degree/10\degree), photometric changes (brightness +20\%/+40\%, compression 50\%/25\% bitrate), temporal manipulations (speed 0.9×/1.1×), geometric transformations (flip horizontal/vertical), content additions (watermark overlay), and combined multi-step perturbations (crop + flip + speed) mimicking messaging app forwarding. Unlike prior work focusing on additive noise or blur, our transformations reflect social media ecosystems (TikTok speed adjustments, WhatsApp compression, platform watermarking) where copyright evasion and viral sharing occur.
+
+\textbf{3-way ablation study}: We quantify each modality's contribution through controlled ablation, testing Fusion (CLIP 512D + Action 15D + Graph 8D), CLIP-only (512D visual), and Action-only (15D temporal) configurations on identical test sets. This isolation reveals which modalities provide detection capability versus match confidence—a distinction absent in prior multi-modal fusion work that reports only aggregate accuracy metrics. Our methodology enables architectural decisions grounded in empirical cost-benefit analysis rather than intuition about modality complementarity.
+
+\textbf{Novel finding on action features as confidence boosters}: Our ablation uncovers a surprising dichotomy: action features minimally improve detection rate (+0.4\% Recall@1, from 98.2\% to 98.6\%) but dramatically boost match confidence (+28\% average similarity, from 0.70 to 0.97). This finding challenges the assumption that all modalities must contribute equally to detection, instead validating efficiency-focused architectures where lightweight features (15D, 2.8\% overhead) enhance certainty in matches already found by strong visual backbones. The confidence improvement has practical implications: copyright systems gain legal justification for automated takedowns, content moderation reduces human review load, and real-time retrieval achieves higher precision at scale.
+
+\textbf{CLIP vertical flip bias identification}: We discover and quantify a systematic orientation bias in CLIP: vertical flip reduces detection to 84.3\% while horizontal flip achieves 100\%, a 16-percentage-point gap. Through failure case analysis, we trace this to CLIP's training data distribution—400M internet images are overwhelmingly "upright," causing the model to learn gravity-dependent features. This bias creates adversarial vulnerability (bad actors can exploit flip\_v for 16\% evasion without perceptual quality loss) and informs mitigation strategies (fine-tuning with orientation augmentation). Our finding contributes to the growing literature on dataset bias in foundation models, demonstrating how training distribution shapes robustness profiles.
+
+\textbf{Open-source implementation}: We release the complete StoryHash pipeline and evaluation code, including feature extraction (CLIP, SAM2 tracking, scene graphs), FAISS indexing, robustness benchmark scripts, and ablation analysis tools\footnote{\url{https://github.com/denisbilli/StoryHash}}. Our reproducible implementation enables researchers to validate findings, extend the benchmark with additional transformations or datasets, and build upon our lightweight fusion architecture for domain-specific video retrieval applications (archival search, surveillance, medical imaging).
+
+% ============================================================================
+% 2. RELATED WORK (EXPANDED)
+% ============================================================================
+\section{Related Work}
+
+\subsection{Video Hashing and Fingerprinting}
+
+Early video hashing methods relied on hand-crafted features such as color histograms, SIFT descriptors, and temporal difference patterns combined with locality-sensitive hashing (LSH) or product quantization for efficient retrieval. While computationally efficient, these approaches struggled with semantic understanding.
+
+The deep learning era brought CNN-based video representations. Two paradigms emerged: \textbf{(1) frame-level features} from ImageNet pre-trained models aggregated via pooling, and \textbf{(2) temporal models} like C3D~\cite{tran2015learning}, I3D~\cite{carreira2017quo}, and VideoMAE~\cite{tong2022videomae} that process spatiotemporal volumes. While powerful for action recognition (UCF101~\cite{soomro2012ucf101}, Kinetics~\cite{carreira2017quo}), these methods are rarely evaluated on \textbf{robustness to realistic perturbations} like compression, crops, or speed changes common in social media re-sharing.
+
+\textbf{Commercial systems} like YouTube Content ID use proprietary techniques combining spectral analysis, temporal segmentation, and neural hashing~\cite{baluja2008neardup}. TRECVid Instance Search~\cite{awad2016trecvid} provides academic benchmarks but focuses on semantic queries, not copy detection under transformations. Early perceptual hashing approaches~\cite{douze2009evaluation} enabled efficient similarity search but struggled with semantic understanding.
+
+\textbf{Gap}: Most academic works evaluate on clean datasets. Our robustness benchmark (14 realistic transforms, 1,242 tests) addresses this gap.
+
+\subsection{Vision-Language Models for Retrieval}
+
+CLIP~\cite{radford2021learning} revolutionized image retrieval by learning joint vision-language embeddings from 400M image-text pairs. Its zero-shot transfer and semantic understanding make it attractive for video tasks. Recent works extend CLIP to video via temporal aggregation, but few analyze \textbf{systematic biases} (e.g., orientation) or \textbf{modality trade-offs} in multi-modal fusion.
+
+\textbf{Gap}: Our ablation study quantifies CLIP's vertical flip bias (84.3\% vs 100\% horizontal) and shows action features boost confidence (+28\%) not detection (+0.4\%), filling this analytical gap.
+
+\subsection{Multi-Modal Fusion}
+
+Multi-modal learning combines visual, audio, and textual signals for video understanding. Early fusion concatenates features before the classifier, late fusion combines predictions, and attention-based fusion learns dynamic weights. Most works optimize for action recognition or video captioning accuracy, not retrieval robustness.
+
+\textbf{Gap}: No quantitative analysis of how different modalities contribute to detection vs confidence in retrieval tasks.
+
+\subsection{Content-Based Copy Detection}
+
+YouTube Content ID and similar systems use proprietary fingerprinting for copyright detection. Academic approaches include temporal video matching (TrecVid), perceptual hashing, and neural hashing. Recent works explore self-supervised learning for invariant representations.
+
+\textbf{Gap}: Lack of transparent, reproducible benchmarks on realistic transformations with ablation studies.
+
+% ============================================================================
+% 3. METHOD + EXPERIMENTS + RESULTS + DISCUSSION (from main_body.tex)
+% ============================================================================
+\input{main_body.tex}
+
+% ============================================================================
+% ACKNOWLEDGMENTS
+% ============================================================================
+\section*{Acknowledgments}
+
+We thank the open-source community for CLIP, FAISS, SAM2, and the DAVIS dataset. This work was conducted independently without external funding.
+
+% ============================================================================
+% REFERENCES
+% ============================================================================
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

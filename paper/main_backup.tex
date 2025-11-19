@@ -1,0 +1,435 @@
+% StoryHash: Lightweight Multi-Modal Fusion for Robust Video Retrieval
+% arXiv submission template
+% Author: Denis Billi
+% Date: November 2025
+
+\documentclass[11pt]{article}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{microtype}
+\usepackage[english]{babel}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[margin=1in]{geometry}
+
+% Hyperref setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue,
+}
+
+% Title and author
+        itle{\textbf{Lightweight Multi-Modal Fusion for Robust Video Retrieval: \\
+When Action Features Boost Confidence, Not Detection}}
+
+\author{
+    Denis Billi \\
+    Independent Researcher \\
+        	exttt{denis@denisbilli.it}
+}
+
+\date{November 2025}
+
+\begin{document}
+
+% Make title and abstract span both columns
+        wocolumn[
+  \maketitle
+
+  % ============================================================================
+  % ABSTRACT
+  % ============================================================================
+  \begin{abstract}
+  Video content retrieval systems must handle realistic perturbations like cropping, compression, and speed changes while maintaining semantic accuracy. We present \textbf{StoryHash}, a lightweight multi-modal fusion architecture combining visual (CLIP), temporal (action features), and structural (scene graph) embeddings into a 527-dimensional vector. Through systematic evaluation on 89 DAVIS videos with 14 transformation types (1,242 tests), we achieve \textbf{98.6\% Recall@1} and \textbf{0.9748 average similarity}. Our ablation study reveals a surprising dichotomy: \textbf{action features boost confidence (+28\% similarity) but minimally impact detection rate (+0.4\% Recall@1)}. This finding validates efficiency-focused designs where lightweight temporal features (15D, 2.8\% overhead) dramatically improve match confidence without requiring expensive temporal models. We identify a CLIP vertical flip bias (84.3\% detection) and show rotation is the only transformation where action features aid detection (-2.3\% degradation without). Our work provides quantitative evidence for complementary fusion architectures where visual features provide discrimination and temporal features provide confidence.
+
+  \noindent\textbf{Keywords:} video retrieval, multi-modal fusion, robustness, ablation study, CLIP, action recognition
+  \end{abstract}
+  \vspace{1em}
+]
+
+% ============================================================================
+% 1. INTRODUCTION
+% ============================================================================
+\section{Introduction}
+
+\subsection{Motivation}
+
+Video content platforms face a persistent challenge: detecting modified or re-uploaded content despite realistic perturbations (cropping, compression, speed changes, flipping). Applications span copyright protection, content moderation, and tamper detection. While deep learning models excel at semantic understanding, their robustness to real-world transformations remains understudied, particularly when combining multiple modalities.
+
+\subsection{Research Questions}
+
+We address three key questions:
+
+\begin{enumerate}
+    \item \textbf{Robustness}: Can a multi-modal video fingerprint achieve >95\% detection rate under realistic perturbations?
+    \item \textbf{Modality Contribution}: How do visual, temporal, and structural features contribute to detection vs confidence?
+    \item \textbf{Efficiency Trade-offs}: What is the cost-benefit of adding lightweight temporal features to visual embeddings?
+\end{enumerate}
+
+\subsection{Contributions}
+
+Our key contributions are:
+
+\begin{itemize}
+    \item \textbf{Comprehensive robustness benchmark}: 1,242 tests on 14 transformation types (crop, rotate, brightness, compression, speed, flip, watermark, combined)
+    \item \textbf{3-way ablation study}: Quantifies CLIP, action, and graph contributions separately
+    \item \textbf{Novel finding}: Action features are "confidence boosters" (+28\% similarity) not "detection enablers" (+0.4\% Recall@1)
+    \item \textbf{CLIP bias identification}: Vertical flip reduces detection to 84.3\% (orientation bias in training data)
+    \item \textbf{Open-source implementation}: Full pipeline and evaluation code released\footnote{\url{https://github.com/denisbilli/StoryHash}}
+\end{itemize}
+
+% ============================================================================
+% 2. RELATED WORK
+% ============================================================================
+\section{Related Work}
+
+\subsection{Video Retrieval and Hashing}
+
+Traditional video hashing methods rely on hand-crafted features (color histograms, HOG, SIFT) combined with dimensionality reduction (PCA, LSH). Recent works leverage deep features from CNNs pre-trained on ImageNet or Kinetics~\cite{radford2021learning}. However, most focus on clean datasets (UCF101, Kinetics) and rarely evaluate robustness to realistic perturbations.
+
+	extbf{Gap}: Limited evaluation on realistic content modifications (compression, crops, speed changes) commonly seen in social media sharing.
+
+\subsection{Multi-Modal Fusion}
+
+Multi-modal learning combines visual, audio, and textual signals for video understanding. Early fusion concatenates features before the classifier, late fusion combines predictions, and attention-based fusion learns dynamic weights. Most works optimize for action recognition or video captioning accuracy, not retrieval robustness.
+
+	extbf{Gap}: No quantitative analysis of how different modalities contribute to detection vs confidence in retrieval tasks.
+
+\subsection{Content-Based Copy Detection}
+
+YouTube Content ID and similar systems use proprietary fingerprinting for copyright detection. Academic approaches include temporal video matching (TrecVid), perceptual hashing, and neural hashing. Recent works explore self-supervised learning for invariant representations.
+
+	extbf{Gap}: Lack of transparent, reproducible benchmarks on realistic transformations with ablation studies.
+
+% ============================================================================
+% 3. METHOD
+% ============================================================================
+\section{Method}
+
+\subsection{Architecture Overview}
+
+\textbf{StoryHash} extracts a 527-dimensional embedding by fusing three components:
+
+\begin{equation}
+\text{StoryHash} = [\text{CLIP}_{\text{512D}}, \text{Action}_{\text{15D}}, \text{Graph}_{\text{8D}}]
+\end{equation}
+
+Figure~\ref{fig:pipeline} illustrates the complete pipeline from video input to retrieval results.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig1_pipeline_placeholder.pdf}
+    \caption{StoryHash pipeline architecture. Input videos are sampled at 2 fps, features are extracted from three modalities (CLIP visual, SAM2 action, scene graph), concatenated into a 527D vector, and indexed using FAISS HNSW for efficient retrieval.}
+    \label{fig:pipeline}
+\end{figure}
+
+\subsubsection{Visual Features (CLIP)}
+
+We use \texttt{openai/clip-vit-base-patch32}~\cite{radford2021learning} to extract 512-dimensional embeddings:
+\begin{itemize}
+    \item \textbf{Sampling}: Uniform frame sampling at 2 fps
+    \item \textbf{Pooling}: Median pooling across frames (robust to outliers)
+    \item \textbf{Rationale}: CLIP's vision-language pre-training captures semantic content
+\end{itemize}
+
+\subsubsection{Action Features (Temporal)}
+
+15-dimensional vector capturing motion and interaction from SAM2~\cite{perazzi2016benchmark} object tracking:
+\begin{itemize}
+    \item Object velocities (mean, std, max): 3D
+    \item Object accelerations (mean, std): 2D
+    \item Direction consistency (mean, std): 2D
+    \item Spatial spread (mean, std, max): 3D
+    \item Interaction density (mean, std, max, edge ratio, temporal coherence): 5D
+\end{itemize}
+
+\subsubsection{Scene Graph Features (Structural)}
+
+8-dimensional encoding of spatial and temporal relationships:
+\begin{itemize}
+    \item Spatial relations: \texttt{near(obj1, obj2)} based on bounding box distance
+    \item Temporal relations: \texttt{co\_occurs(obj1, obj2)}, \texttt{follows(obj1, obj2)}
+    \item Aggregation: Histogram of relation types, normalized
+\end{itemize}
+
+\textbf{Note}: Graph features contribute minimally ($<0.1\%$) in this study. We focus on CLIP + action fusion.
+
+\subsection{Indexing and Retrieval}
+
+We use FAISS~\cite{douze2024faiss} \texttt{IndexHNSWFlat} (M=16, efConstruction=200) for efficient similarity search with inner product (normalized embeddings $\rightarrow$ cosine similarity). Query latency: $<0.01$ms median, 0.32ms P99 at 89 videos.
+
+% ============================================================================
+% 4. EXPERIMENTAL SETUP
+% ============================================================================
+\section{Experimental Setup}
+
+\subsection{Dataset}
+
+\textbf{DAVIS 2017}~\cite{perazzi2016benchmark} (Densely Annotated VIdeo Segmentation):
+\begin{itemize}
+    \item \textbf{Size}: 90 videos (89 indexed, 1 metadata file)
+    \item \textbf{Content}: Natural scenes with objects (animals, vehicles, sports, people)
+    \item \textbf{Duration}: 2-5 seconds per video (50-100 frames at 24 fps)
+    \item \textbf{Resolution}: 480p (854×480)
+\end{itemize}
+
+\subsection{Transformations}
+
+14 real-world perturbation types generated using \texttt{ffmpeg}:
+
+\begin{itemize}
+    \item \textbf{Spatial}: Crop 10\%, 20\% (centered); Rotate 5°, 10° (counter-clockwise)
+    \item \textbf{Photometric}: Brightness +20\%, +40\%; Compression 50\%, 25\% bitrate (H.264)
+    \item \textbf{Temporal}: Speed 0.9×, 1.1×
+    \item \textbf{Geometric}: Flip horizontal (flip_h), vertical (flip_v)
+    \item \textbf{Watermark}: Text overlay "SAMPLE" at bottom-right
+    \item \textbf{Combined}: Crop 10\% + flip\_h + speed 0.9×
+\end{itemize}
+
+\subsection{Evaluation Metrics}
+
+\begin{itemize}
+    \item \textbf{Recall@k}: Fraction of transformed videos where original appears in top-k results
+    \item \textbf{Average Similarity}: Mean cosine similarity between original and transformed embedding
+    \item \textbf{Min/Max Similarity}: Range of similarity scores per transformation
+\end{itemize}
+
+\subsection{Ablation Study Design}
+
+Three configurations tested on identical transformed videos:
+
+\begin{enumerate}
+    \item \textbf{Fusion} (baseline): CLIP 512D + Action 15D + Graph 8D = 527D
+    \item \textbf{CLIP-only}: CLIP 512D, zero-padded to 527D for FAISS compatibility
+    \item \textbf{Action-only}: Action 15D, zero-padded to 527D
+\end{enumerate}
+
+\textbf{Hypothesis}: CLIP alone sufficient for detection (visual semantics preserved under transformations); action features help with temporal perturbations (speed, flip).
+
+% ============================================================================
+% 5. RESULTS
+% ============================================================================
+\section{Results}
+
+\subsection{Robustness Benchmark (Fusion Baseline)}
+
+\textbf{Overall Performance}:
+\begin{itemize}
+    \item \textbf{Recall@1}: 98.6\% (1,225/1,242 tests)
+    \item \textbf{Recall@3}: 99.7\% (1,239/1,242 tests)
+    \item \textbf{Average Similarity}: 0.9748
+\end{itemize}
+
+Table~\ref{tab:per_transform} shows detailed per-transformation results. \textbf{Key Observation}: Vertical flip (flip\_v) is an outlier with only 84.3\% Recall@1, suggesting systematic bias in CLIP's training data.
+
+% Insert per-transformation table
+\input{figures/table1_per_transform.tex}
+
+\subsection{Ablation Study Results}
+
+Figure~\ref{fig:ablation} summarizes the 3-way ablation study showing detection (Recall@1) and confidence (similarity) performance.
+
+\begin{figure}[t]
+    \centering
+    \begin{subfigure}[b]{0.48\columnwidth}
+        \includegraphics[width=\textwidth]{figures/fig2_ablation_summary.pdf}
+        \caption{Detection (Recall@1)}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\columnwidth}
+        \includegraphics[width=\textwidth]{figures/fig3_similarity_delta.pdf}
+        \caption{Confidence (Similarity)}
+    \end{subfigure}
+    \caption{3-way ablation study: (a) CLIP dominates detection (98.2\%), action adds +0.4\%; (b) Action dramatically boosts confidence (+28\% similarity).}
+    \label{fig:ablation}
+\end{figure}
+
+\subsubsection{CLIP-only Performance}
+
+\begin{itemize}
+    \item \textbf{Recall@1}: 98.2\% (1,224/1,246 tests)
+    \item \textbf{Recall@3}: 99.4\% (1,239/1,246 tests)
+    \item \textbf{Average Similarity}: 0.6996
+\end{itemize}
+
+\textbf{Comparison with Fusion}:
+\begin{itemize}
+    \item Detection: -0.4\% (minimal difference)
+    \item Confidence: -28\% similarity (massive difference)
+\end{itemize}
+
+\textbf{Per-Transformation Highlights}:
+\begin{itemize}
+    \item \textbf{flip\_v}: 84.3\% R@1 (identical to fusion $\rightarrow$ CLIP-inherent bias)
+    \item \textbf{rotate\_10}: 96.6\% R@1 (vs 98.9\% fusion $\rightarrow$ -2.3\%, action helps)
+    \item \textbf{All other transforms}: 100.0\% R@1 (identical to fusion)
+\end{itemize}
+
+\subsubsection{Action-only Performance}
+
+\begin{itemize}
+    \item \textbf{Recall@1}: 1.1\% (14/1,246 tests)
+    \item \textbf{Recall@3}: 3.4\% (42/1,246 tests)
+    \item \textbf{Average Similarity}: 0.7500
+\end{itemize}
+
+	extbf{Key Finding}: Action features alone are insufficient for video retrieval in this setting. Only 1 video (\texttt{schoolgirls}) was detected across all transformations.
+
+\noindent\textbf{Note on Action-only similarity}: The reported ~0.75 average similarity for Action-only is an artifact of zero-padding the 15D action vector to 527D followed by cosine normalization; it does not reflect meaningful semantic structure or discriminative power.
+
+\subsubsection{Three-Way Comparison}
+
+\begin{table}[h]
+\centering
+\caption{Overall ablation study results comparing Fusion, CLIP-only, and Action-only.}
+\label{tab:ablation}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{Fusion} & \textbf{CLIP-only} & \textbf{Action-only} \\
+\midrule
+Recall@1 (\%) & 98.6 & 98.2 (-0.4\%) & 1.1 (-97.5\%) \\
+Avg Similarity & 0.9748 & 0.6996 (-28\%) & 0.7500 (-23\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Interpretation}:
+\begin{itemize}
+    \item CLIP dominates detection: Removing CLIP $\rightarrow$ 97.5\% drop in Recall@1
+    \item Action boosts confidence: Removing action $\rightarrow$ 28\% drop in similarity
+    \item Complementary fusion: Neither modality sufficient alone
+\end{itemize}
+
+\subsection{Transformation-Specific Insights}
+
+\subsubsection{Rotation: Only Case Where Action Helps Detection}
+
+Spatial rotation disrupts CLIP's visual embeddings, but temporal motion patterns (velocity, direction) remain invariant. Action features compensate slightly: Fusion 98.9\% $\rightarrow$ CLIP-only 96.6\% (\textbf{-2.3\%}).
+
+\subsubsection{flip\_v: CLIP Vertical Orientation Bias}
+
+Figure~\ref{fig:flip_bias} shows the stark contrast between horizontal and vertical flip performance, confirming CLIP's training data contains mostly upright images.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.7\columnwidth]{figures/fig4_flip_bias.pdf}
+    \caption{CLIP vertical flip bias: horizontal flip achieves 100\% detection while vertical flip drops to 84.3\% for both Fusion and CLIP-only (action features cannot compensate).}
+    \label{fig:flip_bias}
+\end{figure}
+
+\subsubsection{Visual Transforms: CLIP Dominance}
+
+All spatial (crop), photometric (brightness, compression), and watermark transforms achieve 100\% Recall@1 for both Fusion and CLIP-only. Action features contribute \textbf{only to confidence} (similarity), not detection.
+
+% ============================================================================
+% 6. DISCUSSION
+% ============================================================================
+\section{Discussion}
+
+\subsection{Main Finding: Action as Confidence Booster}
+
+Our ablation study reveals a \textbf{dichotomy} in multi-modal fusion:
+\begin{itemize}
+    \item \textbf{Detection (Recall@1)}: CLIP provides 98.2\%, action adds +0.4\% $\rightarrow$ fusion 98.6\%
+    \item \textbf{Confidence (Similarity)}: CLIP provides 0.70, action adds +0.28 $\rightarrow$ fusion 0.97
+\end{itemize}
+
+\textbf{Implication}: For efficiency-critical systems, lightweight action features (15D) justify their overhead by dramatically improving match confidence without expensive temporal models (VideoMAE: 768D, 2.06s inference). This is critical for:
+\begin{itemize}
+    \item \textbf{Copyright systems}: High confidence prevents false positives
+    \item \textbf{Content moderation}: Borderline matches need confidence scoring
+    \item \textbf{Real-time retrieval}: Lightweight fusion enables CPU deployment
+\end{itemize}
+
+\subsection{CLIP Vertical Flip Bias}
+
+The 84.3\% detection rate on flip\_v (vs 100\% on flip\_h) reveals a systematic orientation bias in CLIP's training. Practical implications:
+\begin{itemize}
+    \item \textbf{Social media}: Videos filmed upside-down (rare) may evade detection
+    \item \textbf{Tamper detection}: Adversaries could exploit flip\_v for evasion
+    \item \textbf{Mitigation}: Data augmentation with vertical flips during CLIP fine-tuning
+\end{itemize}
+
+\subsection{Rotation as Special Case}
+
+Rotation is the only transformation where action features significantly aid detection (-2.3\% without). This suggests:
+\begin{itemize}
+    \item Visual features are sensitive to spatial orientation (ConvNet inductive bias)
+    \item Temporal features are invariant to rotation (velocity/acceleration in pixel space)
+    \item Future work: Rotation-equivariant visual encoders (Group CNNs) may close this gap
+\end{itemize}
+
+\subsection{Architecture Validation}
+
+Figure~\ref{fig:architecture} shows the breakdown of our 527D embedding. The architecture achieves near-optimal robustness (98.6\% R@1) with minimal overhead.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\columnwidth]{figures/fig5_architecture.pdf}
+    \caption{StoryHash vector composition: CLIP features dominate (512D, 97.2\%), action features add lightweight temporal information (15D, 2.8\%), graph features optional (8D, 0\%).}
+    \label{fig:architecture}
+\end{figure}
+
+\textbf{Cost-benefit}: 15D (2.8\% overhead) $\rightarrow$ +28\% confidence boost validates efficiency-focused designs.
+
+% ============================================================================
+% 7. LIMITATIONS AND FUTURE WORK
+% ============================================================================
+\section{Limitations and Future Work}
+
+\subsection{Limitations}
+
+\begin{enumerate}
+    \item \textbf{Small dataset}: 89 videos (DAVIS 2017) limits generalization claims
+    \item \textbf{Short videos}: 2-5 seconds, no long-form narrative evaluation
+    \item \textbf{Controlled transforms}: ffmpeg-generated, not adversarial attacks
+    \item \textbf{Graph features underutilized}: Minimal contribution in current formulation
+\end{enumerate}
+
+\subsection{Future Work}
+
+\begin{enumerate}
+    \item Large-scale evaluation: Test on YouTube-8M, ActivityNet (1000+ videos)
+    \item Adversarial robustness: Evaluate against deepfakes, adversarial patches
+    \item Long-form videos: Extend to movies, TV shows with hierarchical embeddings
+    \item Graph refinement: Explore GNN-based scene graph encoders~\cite{johnson2015image}
+    \item CLIP fine-tuning: Data augmentation with vertical flips to address bias
+    \item Temporal models: Compare with VideoMAE~\cite{tong2022videomae}, VJEPA, TimeSformer
+\end{enumerate}
+
+% ============================================================================
+% 8. CONCLUSION
+% ============================================================================
+\section{Conclusion}
+
+We presented \textbf{StoryHash}, a lightweight multi-modal fusion architecture for robust video retrieval, achieving \textbf{98.6\% Recall@1} and \textbf{0.9748 similarity} on 1,242 tests across 14 realistic transformations. Our ablation study reveals that \textbf{action features boost confidence (+28\%) but minimally impact detection (+0.4\%)}, providing quantitative evidence for efficiency-focused architectures where lightweight temporal features (15D, 2.8\% overhead) dramatically improve match confidence without expensive temporal models.
+
+We identified a \textbf{CLIP vertical flip bias} (84.3\% detection) and showed \textbf{rotation is the only transformation} where action features aid detection (-2.3\% degradation). Our findings validate complementary fusion designs where visual features provide discrimination and temporal features provide confidence, with practical implications for copyright detection, content moderation, and real-time retrieval systems.
+
+% ============================================================================
+% ACKNOWLEDGMENTS
+% ============================================================================
+\section*{Acknowledgments}
+
+We thank the open-source community for CLIP, FAISS, SAM2, and the DAVIS dataset. This work was conducted independently without external funding.
+
+% ============================================================================
+% REFERENCES
+% ============================================================================
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

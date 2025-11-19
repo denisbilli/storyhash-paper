@@ -1,0 +1,3 @@
+# This directory contains video datasets
+# Expected structure:
+# - davis/JPEGImages/480p/  (DAVIS 2017 videos)

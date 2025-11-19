@@ -1,0 +1,5 @@
+# Extracted embeddings
+# - clip_features.npy (N, 512)
+# - action_features.npy (N, 15)
+# - graph_features.npy (N, 8)
+# - fusion_527d.npy (N, 527)
