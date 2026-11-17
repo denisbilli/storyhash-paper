@@ -61,11 +61,53 @@ A single vector per video works when the whole video is a short clip (DAVIS, 2-5
 
 Clips of 3-5 seconds keep most of the accuracy with a third to a fifth of the vectors. L2-normalising the frame descriptors collapses every row below 0.08: near-empty frames (black, flat colour) become full-length vectors that match everything.
 
-Next: compute the story part (motion and interactions) on 3-5 s clips and test whether it orders copy, same scene and different story correctly, on VSC 2022 for copies and FIVR-200K for the scene and event levels.
+## The story part: action on 4-second clips
+
+Each 4 s window also gets an action vector from a pretrained video model (VideoMAE, fine-tuned on Kinetics-400), combined with the SSCD appearance vector of the same window. A motion vector from optical flow was tried as well and did not help: different clips of people walking produce the same flow statistics.
+
+### FIVR-200K: copy, same scene, same event
+
+[FIVR-200K](https://github.com/MKLab-ITI/FIVR-200K) grades how related two videos are: near-duplicate, duplicate scene (DSVR), complementary scene (CSVR), same incident (ISVR). 7,295 of the 12,210 annotated YouTube videos are still online, covering 60 of the 100 queries. The database is these annotated videos only, without the 200,000 distractors, so absolute numbers are higher than in published work; the comparison between rows is fair. Video similarity: for each query window, the best matching window of the other video, averaged. mAP as in the official evaluator.
+
+| Method | DSVR | CSVR | ISVR |
+|---|---|---|---|
+| SSCD appearance | 0.926 | 0.904 | 0.794 |
+| SSCD, L2-normalised | 0.916 | 0.893 | 0.779 |
+| CLIP ViT-B/32 | 0.642 | 0.649 | 0.633 |
+| Action alone | 0.797 | 0.783 | 0.702 |
+| **Appearance + action** | **0.927** | **0.908** | **0.809** |
+
+Per query, appearance + action against appearance alone:
+
+| Task | Better | Worse | Equal | Mean gain | 95% interval |
+|---|---|---|---|---|---|
+| DSVR | 27 | 24 | 9 | +0.1 pts | -0.5 to +0.7 |
+| CSVR | 33 | 19 | 8 | +0.4 pts | -0.2 to +1.0 |
+| ISVR | 44 | 11 | 5 | +1.5 pts | +0.7 to +2.4 |
+
+The action vector helps where the story is the same and the pictures are not (same incident, p < 0.001 on a sign-flip test) and leaves copies and same-scene retrieval unchanged. On its own it orders the levels as expected. Mean similarity to the query:
+
+| Near-duplicate | Same scene | Complementary scene | Same incident | Unrelated |
+|---|---|---|---|---|
+| 0.79 | 0.63 | 0.50 | 0.38 | 0.18 |
+
+### VSC 2022: copies
+
+Pilot on 2,929 queries and 4,938 references (all 2,707 true pairs plus random distractors), 4 s windows, official evaluator.
+
+| Method | µAP |
+|---|---|
+| SSCD appearance | 0.747 |
+| Action alone | 0.139 |
+| Appearance + action | 0.772 |
+
+The weighting of the action part chosen on VSC is also the best one on FIVR.
+
+Next: a second event-level benchmark (EVVE) and partial-copy localisation with clips.
 
 ## Changes from the November 2025 version
 
-The first version described a fusion of CLIP with action (SAM2) and scene-graph features and reported a "+28% similarity" gain from action features. Those features were placeholder zero vectors in the code, so that gain came from comparing vectors with different norms. The results above come from CLIP or SSCD alone: the story part has not been measured yet. The November 2025 paper has been withdrawn from this repository and is being revised.
+The first version described a fusion of CLIP with action (SAM2) and scene-graph features and reported a "+28% similarity" gain from action features. Those features were placeholder zero vectors in the code, so that gain came from comparing vectors with different norms. The DAVIS, VSC and window results above come from CLIP or SSCD alone; the story part is measured in the section on action. The November 2025 paper has been withdrawn from this repository and is being revised.
 
 ## Citation
 
